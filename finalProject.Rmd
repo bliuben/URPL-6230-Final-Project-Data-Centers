@@ -1,0 +1,57 @@
+---
+title: "Final Project"
+output: html_document
+date: "2026-10-26"
+---
+
+```{r setup, include=FALSE}
+require(tidyverse)
+require(tidycensus)
+require(ggmap)
+register_stadiamaps("28de9a24-2fa0-417f-9347-28a2f7736a6d")
+```
+
+## Preparing data
+
+To begin my analysis, I will look at the legislation data provided by the U.S. Data Center Policy Explorer. The values in the `status` column can be very specific, but I want the five-value policy stages as presented on the website. To get this, I look through the data and see which statuses correspond to which stages and used `mutate()` to create a new `stage` column. i used `count()` to make sure that I get the same counts in my data frame as there are on the website, and I do.
+
+```{r}
+legislation <- read_csv("filtered-data-center-policies.csv")
+proposed <- c("Introduced", "Introduced (repeal of existing provision)", "Proposed")
+in_committee <- c("In Committee", "In Committee (Left pending in subcommittee on Fiscal Matters, 04/11/2013)", "In Committee (re-referred to Appropriations, April 8, 2019; Finance Committee reported as committed 8-3)", "In Committee (Study Bill)")
+advanced <- c("Approved", "Crossed Over", "Engrossed", "Engrossed (passed Senate; left in Rules in House; not enacted)", "Passed", "Passed (Act No. 175 of 2016, Nov. 21, 2016)", "Passed (enacted as Chapter 85, approved May 23, 2025)", "Passed (resolution authorizing bill introduction)", "Postponed Indefinitely", "Substituted by A5662", "Substituted by S4293")
+enacted <- c("Enacted", "Enacted (expired June 30, 2011)", "Enacted (veto overridden, Chapter 3 of 2025 Special Session)", "Incorporated", "Signed", "Signed/Enacted", "Signed/Enacted (expired June 30, 2020)", "Signed/Enacted (provision for equipment purchased or leased on or before June 30, 2011; MOU window January 1, 2008 – December 31, 2008)")
+legislation <- legislation %>% mutate(stage=ifelse(status %in% proposed,"Proposed / Introduced",ifelse(status %in% in_committee, "In Committee",ifelse(status %in% advanced, "Advanced",ifelse(status %in% enacted, "Enacted", "Vetoed")))))
+legislation %>% count(stage=="Proposed / Introduced")
+legislation %>% count(stage=="In Committee")
+legislation %>% count(stage=="Advanced")
+legislation %>% count(stage=="Enacted")
+legislation %>% count(stage=="Vetoed")
+```
+
+Next, I add the ten policy categories as separate columns in the table. The `topics` column lists any of the ten policy topics the bill covers. By creating ten logical vectors as columns, the data can be filtered more easily for later analysis. This can be done using `str_detect()` on the `topics` column. Looking at the results using `head()` shows that this method returns the desired result.
+
+```{r}
+legislation <- legislation %>% mutate(cost_allocation=str_detect(legislation$topics,"Cost allocation and ratepayer protection"),disclosure=str_detect(legislation$topics,"Disclosure and transparency"),energy=str_detect(legislation$topics,"Energy and grid planning"),eia=str_detect(legislation$topics,"Environmental impact assessment (EIA)"),fiscal=str_detect(legislation$topics,"Fiscal instruments"),governance=str_detect(legislation$topics,"Governance and authority"),ban=str_detect(legislation$topics,"Prohibitions/Bans"),definition=str_detect(legislation$topics,"Regulated entity definition"),performance_standard=str_detect(legislation$topics,"Resource performance standard"),siting=str_detect(legislation$topics,"Siting and land use"))
+legislation %>% select(bill,topics,cost_allocation,disclosure,energy,eia,fiscal,governance,ban,definition,performance_standard,siting) %>% head()
+```
+
+
+## Data centers
+
+A list of over 1,000 data centers from around the country is provided by the Data Driven EnviroLab. The data set provides the location, owner, operator, and historical operational status of each data center listed.
+
+```{r}
+data_centers <- read_csv("Campuses.csv")
+head(data_centers)
+qmplot(data=data_centers, x=lon, y=lat, color=I("#ffc000"))
+```
+
+Not all data centers are created equally. The main driving force behind recent public backlash and policy response is hyperscale data centers, which are used for AI training and are generally of recent construction. Therefore, to narrow the scope of the data centers used in the analysis, the data set will be filtered to include those which were being expanded or newly built from 2022 to 2025. The data can be further narrowed down by looking at the owner or operator of the data center and selecting those which are known hyperscale data center providers or excluding known telecom and webhosting data center providers.
+
+```{r}
+new_construction <- c("Expansion", "Under Construction")
+new_data_centers <- data_centers %>% filter(`2022` %in% new_construction | `2023` %in% new_construction | `2024` %in% new_construction | `2025` %in% new_construction)
+head(data_centers)
+qmplot(data=new_data_centers, x=lon, y=lat, color=I("#c00000"))
+```
